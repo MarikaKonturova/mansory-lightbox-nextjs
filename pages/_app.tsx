@@ -9,7 +9,7 @@ const bellota = Bellota_Text({
 });
 export default function App({ Component, pageProps }: AppProps) {
   return (
-    <div className={`${bellota.variable} font-sans`}>
+    <div className={`${bellota.variable} font-sans h-full`}>
       <Component {...pageProps} />
     </div>
   );
