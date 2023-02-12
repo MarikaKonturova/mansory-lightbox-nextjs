@@ -5,11 +5,6 @@ import { useRef } from "react";
 import { Tab } from "@headlessui/react";
 import Mansory from "react-masonry-css";
 import classNames from "classnames";
-import modern1 from "@/public/steve-johnson-modern-1.jpg";
-import modern2 from "@/public/steve-johnson-modern-2.jpg";
-import modern3 from "@/public/steve-johnson-modern-3.jpg";
-import modern4 from "@/public/steve-johnson-modern-4.jpg";
-import modern5 from "@/public/steve-johnson-modern-5.jpg";
 import bgImg from "@/public/painter-photo.jpg";
 import LightGalleryComponent from "lightgallery/react";
 import { LightGallery } from "lightgallery/lightgallery";
@@ -18,7 +13,19 @@ import "lightgallery/css/lg-zoom.css";
 import "lightgallery/css/lg-thumbnail.css";
 import lgThumbnail from "lightgallery/plugins/thumbnail";
 import lgZoom from "lightgallery/plugins/zoom";
-const images = [modern1, modern2, modern3, modern4, modern5];
+import { createApi } from "unsplash-js";
+
+import { GetStaticProps } from "next";
+
+import * as nodeFetch from "node-fetch";
+
+type Paintings = {
+  src: string;
+  thumb: string;
+  width: number;
+  height: number;
+  alt: string;
+};
 const tabs = [
   {
     key: "all",
@@ -34,8 +41,44 @@ const tabs = [
   },
 ];
 
-export default function Home() {
-  const lightboxRef = useRef<LightGallery | null>(null);
+type HomeProps = {
+  paintings: Paintings[];
+};
+export const getStaticProps: GetStaticProps<HomeProps> = async () => {
+  const unsplash = createApi({
+    accessKey: process.env.UNSPLASH_ACCESS_KEY!,
+    fetch: nodeFetch as unknown as typeof fetch,
+  });
+  const classic = await unsplash.search.getPhotos({
+    query: "classic paintings",
+  });
+  const modern = await unsplash.search.getPhotos({
+    query: "classic paintings",
+  });
+
+  const mappedPaintings: Paintings[] = [];
+
+  if ((classic.type = "success")) {
+    const paintingArr = classic.response!.results.map((classic, idx) => ({
+      src: classic.urls.full,
+      thumb: classic.urls.thumb,
+      width: classic.width,
+      height: classic.height,
+      alt: classic.alt_description ?? `classic-img-${idx}`,
+    }));
+    mappedPaintings.push(...paintingArr);
+  } else {
+    console.error("Could not get paintings");
+  }
+
+  return {
+    props: {
+      paintings: mappedPaintings,
+    },
+  };
+};
+
+export default function Home({ paintings }: HomeProps) {
   return (
     /* set overflow-auto because we have bg picture */
     <div className="h-full  text-white overflow-auto">
@@ -89,60 +132,14 @@ export default function Home() {
             </Tab.List>
             <Tab.Panels className=" h-full  max-w-[900px] w-full p-2 my-6 sm:p-4">
               <Tab.Panel>
-                <Mansory
-                  breakpointCols={2}
-                  className="flex gap-3"
-                  columnClassName=""
-                >
-                  {images.map((img, index) => (
-                    <Image
-                      key={img.src}
-                      src={img}
-                      alt="steve-johnson-modern-1"
-                      className=" my-4"
-                      placeholder="blur"
-                      onClick={() => {
-                        lightboxRef.current?.openGallery(index);
-                      }}
-                    />
-                  ))}
-                </Mansory>
-                <LightGalleryComponent
-                  onInit={(ref) => {
-                    if (ref) {
-                      lightboxRef.current = ref.instance;
-                    }
-                  }}
-                  speed={500}
-                  plugins={[lgThumbnail, lgZoom]}
-                  download={false}
-                  dynamic
-                  dynamicEl={[
-                    {
-                      src: "/steve-johnson-modern-1.jpg",
-                      thumb: "/steve-johnson-modern-1.jpg",
-                    },
-                    {
-                      src: "/steve-johnson-modern-2.jpg",
-                      thumb: "/steve-johnson-modern-2.jpg",
-                    },
-                    {
-                      src: "/steve-johnson-modern-3.jpg",
-                      thumb: "/steve-johnson-modern-3.jpg",
-                    },
-                    {
-                      src: "/steve-johnson-modern-4.jpg",
-                      thumb: "/steve-johnson-modern-4.jpg",
-                    },
-                    {
-                      src: "/steve-johnson-modern-5.jpg",
-                      thumb: "/steve-johnson-modern-5.jpg",
-                    },
-                  ]}
-                />
+                <Gallery images={paintings} />
               </Tab.Panel>
-              <Tab.Panel>Classic painting</Tab.Panel>
-              <Tab.Panel>Exotic painting</Tab.Panel>
+              <Tab.Panel>
+                <Gallery images={[]} />
+              </Tab.Panel>
+              <Tab.Panel>
+                <Gallery images={[]} />
+              </Tab.Panel>
             </Tab.Panels>
           </Tab.Group>
         </div>
@@ -151,5 +148,49 @@ export default function Home() {
         <p>T.Konturova&rsquo;s Portfolio</p>
       </footer>
     </div>
+  );
+}
+
+type GalleryProps = {
+  images: Paintings[];
+};
+
+function Gallery({ images }: GalleryProps) {
+  const lightboxRef = useRef<LightGallery | null>(null);
+
+  return (
+    <>
+      <Mansory breakpointCols={2} className="flex gap-3" columnClassName="">
+        {images.map((img, index) => (
+          <Image
+            key={img.src}
+            src={img.src}
+            alt={img.alt}
+            className=" my-4 hover:opacity-90 cursor-pointer"
+            // placeholder="blur"
+            width={img.width}
+            height={img.height}
+            onClick={() => {
+              lightboxRef.current?.openGallery(index);
+            }}
+          />
+        ))}
+      </Mansory>
+      <LightGalleryComponent
+        onInit={(ref) => {
+          if (ref) {
+            lightboxRef.current = ref.instance;
+          }
+        }}
+        speed={500}
+        plugins={[lgThumbnail, lgZoom]}
+        download={false}
+        dynamic
+        dynamicEl={images.map((img) => ({
+          src: img.src,
+          thumb: img.src,
+        }))}
+      />
+    </>
   );
 }
