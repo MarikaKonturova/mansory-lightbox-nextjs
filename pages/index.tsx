@@ -1,32 +1,17 @@
+import bgImg from "@/public/painter-photo.jpg";
+import { Tab } from "@headlessui/react";
+import classNames from "classnames";
+
+import { GetStaticProps } from "next";
 import Head from "next/head";
 import Image from "next/image";
 import Link from "next/link";
-import { useRef } from "react";
-import { Tab } from "@headlessui/react";
-import Mansory from "react-masonry-css";
-import classNames from "classnames";
-import bgImg from "@/public/painter-photo.jpg";
-import LightGalleryComponent from "lightgallery/react";
-import { LightGallery } from "lightgallery/lightgallery";
-import "lightgallery/css/lightgallery.css";
-import "lightgallery/css/lg-zoom.css";
-import "lightgallery/css/lg-thumbnail.css";
-import lgThumbnail from "lightgallery/plugins/thumbnail";
-import lgZoom from "lightgallery/plugins/zoom";
 import { createApi } from "unsplash-js";
-import lqip from "lqip-modern";
-import { GetStaticProps } from "next";
-
+import { Gallery } from "@/components/Gallery";
 import * as nodeFetch from "node-fetch";
+import { Painting } from "@/types";
+import { getImages } from "@/utils/image-util";
 
-type Painting = {
-  src: string;
-  thumb: string;
-  width: number;
-  height: number;
-  alt: string;
-  blurDataUrl: string;
-};
 const tabs = [
   {
     key: "all",
@@ -42,30 +27,8 @@ const tabs = [
   },
 ];
 
-type HomeProps = {
-  classic: Painting[];
-  modern: Painting[];
-};
-export const getStaticProps: GetStaticProps<HomeProps> = async () => {
-  const unsplash = createApi({
-    accessKey: process.env.UNSPLASH_ACCESS_KEY!,
-    fetch: nodeFetch as unknown as typeof fetch,
-  });
-
-  const classic = await getImages(unsplash, "classic paintings");
-  const modern = await getImages(unsplash, "modern paintings");
-
-  return {
-    props: {
-      classic,
-      modern,
-    },
-  };
-};
-
 export default function Home({ classic, modern }: HomeProps) {
   return (
-    /* set overflow-auto because we have bg picture */
     <div className="h-full  text-white overflow-auto">
       <Head>
         <title>Create Next App</title>
@@ -135,93 +98,25 @@ export default function Home({ classic, modern }: HomeProps) {
     </div>
   );
 }
-
-type GalleryProps = {
-  images: Painting[];
+type HomeProps = {
+  classic: Painting[];
+  modern: Painting[];
 };
-
-function Gallery({ images }: GalleryProps) {
-  const lightboxRef = useRef<LightGallery | null>(null);
-
-  return (
-    <>
-      <Mansory breakpointCols={2} className="flex gap-3" columnClassName="">
-        {images.map((img, index) => (
-          <div className="relative" key={img.src + img.alt}>
-            <Image
-              key={img.src}
-              src={img.src}
-              alt={img.alt}
-              className=" my-4 "
-              // placeholder="blur"
-              width={img.width}
-              height={img.height}
-              placeholder="blur"
-              blurDataURL={img.blurDataUrl}
-            />
-            <div
-              className="absolute w-full h-full bg-transparent inset-0  hover:cursor-pointer hover:bg-stone-900 hover:bg-opacity-10"
-              onClick={() => {
-                lightboxRef.current?.openGallery(index);
-              }}
-            ></div>
-          </div>
-        ))}
-      </Mansory>
-      <LightGalleryComponent
-        onInit={(ref) => {
-          if (ref) {
-            lightboxRef.current = ref.instance;
-          }
-        }}
-        speed={500}
-        plugins={[lgThumbnail, lgZoom]}
-        download={false}
-        dynamic
-        dynamicEl={images.map((img) => ({
-          src: img.src,
-          thumb: img.src,
-        }))}
-      />
-    </>
-  );
-}
-
-async function getImages(
-  cli: ReturnType<typeof createApi>,
-  query: string
-): Promise<Painting[]> {
-  const mappedPaintings: Painting[] = [];
-
-  const paintings = await cli.search.getPhotos({
-    query,
+export const getStaticProps: GetStaticProps<HomeProps> = async () => {
+  const unsplash = createApi({
+    accessKey: process.env.UNSPLASH_ACCESS_KEY!,
+    fetch: nodeFetch as unknown as typeof fetch,
   });
-  if ((paintings.type = "success")) {
-    const paintingArr = paintings.response!.results.map((painting, idx) => ({
-      src: painting.urls.full,
-      thumb: painting.urls.thumb,
-      width: painting.width,
-      height: painting.height,
-      alt: painting.alt_description ?? `classic-img-${idx}`,
-    }));
-    const paintingsArrWithDataUrl: Painting[] = [];
 
-    for (const painting of paintingArr) {
-      const blurDataUrl = await getDataUrl(painting.src);
-      paintingsArrWithDataUrl.push({ ...painting, blurDataUrl });
-    }
-    mappedPaintings.push(...paintingsArrWithDataUrl);
-  } else {
-    console.error("Could not get paintings");
-  }
-  return mappedPaintings;
-}
+  const [classic, modern] = await Promise.all([
+    getImages(unsplash, "classic paintings"),
+    getImages(unsplash, "modern paintings"),
+  ]);
 
-const getDataUrl = async (imgUrl: string) => {
-  const imgData = await fetch(imgUrl);
-
-  const arrayBufferData = await imgData.arrayBuffer();
-  const lqipData = await lqip(Buffer.from(arrayBufferData));
-
-  return lqipData.metadata.dataURIBase64;
+  return {
+    props: {
+      classic,
+      modern,
+    },
+  };
 };
