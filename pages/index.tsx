@@ -14,17 +14,18 @@ import "lightgallery/css/lg-thumbnail.css";
 import lgThumbnail from "lightgallery/plugins/thumbnail";
 import lgZoom from "lightgallery/plugins/zoom";
 import { createApi } from "unsplash-js";
-
+import lqip from "lqip-modern";
 import { GetStaticProps } from "next";
 
 import * as nodeFetch from "node-fetch";
 
-type Paintings = {
+type Painting = {
   src: string;
   thumb: string;
   width: number;
   height: number;
   alt: string;
+  blurDataUrl: string;
 };
 const tabs = [
   {
@@ -42,43 +43,27 @@ const tabs = [
 ];
 
 type HomeProps = {
-  paintings: Paintings[];
+  classic: Painting[];
+  modern: Painting[];
 };
 export const getStaticProps: GetStaticProps<HomeProps> = async () => {
   const unsplash = createApi({
     accessKey: process.env.UNSPLASH_ACCESS_KEY!,
     fetch: nodeFetch as unknown as typeof fetch,
   });
-  const classic = await unsplash.search.getPhotos({
-    query: "classic paintings",
-  });
-  const modern = await unsplash.search.getPhotos({
-    query: "classic paintings",
-  });
 
-  const mappedPaintings: Paintings[] = [];
-
-  if ((classic.type = "success")) {
-    const paintingArr = classic.response!.results.map((classic, idx) => ({
-      src: classic.urls.full,
-      thumb: classic.urls.thumb,
-      width: classic.width,
-      height: classic.height,
-      alt: classic.alt_description ?? `classic-img-${idx}`,
-    }));
-    mappedPaintings.push(...paintingArr);
-  } else {
-    console.error("Could not get paintings");
-  }
+  const classic = await getImages(unsplash, "classic paintings");
+  const modern = await getImages(unsplash, "modern paintings");
 
   return {
     props: {
-      paintings: mappedPaintings,
+      classic,
+      modern,
     },
   };
 };
 
-export default function Home({ paintings }: HomeProps) {
+export default function Home({ classic, modern }: HomeProps) {
   return (
     /* set overflow-auto because we have bg picture */
     <div className="h-full  text-white overflow-auto">
@@ -97,7 +82,7 @@ export default function Home({ paintings }: HomeProps) {
       />
       <div className=" fixed left-0 top-0 w-full h-full bg-gradient-to-t from-[#040404] z-10"></div>
 
-      <header className="fixed flex justify-between  items-center h-[90px] w-full z-20 px-6 ">
+      <header className="fixed flex justify-between  items-center h-[90px] w-full z-30 px-6 ">
         <div className="invisible">hamburger menu</div>
 
         <Link
@@ -132,13 +117,13 @@ export default function Home({ paintings }: HomeProps) {
             </Tab.List>
             <Tab.Panels className=" h-full  max-w-[900px] w-full p-2 my-6 sm:p-4">
               <Tab.Panel>
-                <Gallery images={paintings} />
+                <Gallery images={[...classic, ...modern]} />
               </Tab.Panel>
               <Tab.Panel>
-                <Gallery images={[]} />
+                <Gallery images={classic} />
               </Tab.Panel>
               <Tab.Panel>
-                <Gallery images={[]} />
+                <Gallery images={modern} />
               </Tab.Panel>
             </Tab.Panels>
           </Tab.Group>
@@ -152,7 +137,7 @@ export default function Home({ paintings }: HomeProps) {
 }
 
 type GalleryProps = {
-  images: Paintings[];
+  images: Painting[];
 };
 
 function Gallery({ images }: GalleryProps) {
@@ -162,18 +147,25 @@ function Gallery({ images }: GalleryProps) {
     <>
       <Mansory breakpointCols={2} className="flex gap-3" columnClassName="">
         {images.map((img, index) => (
-          <Image
-            key={img.src}
-            src={img.src}
-            alt={img.alt}
-            className=" my-4 hover:opacity-90 cursor-pointer"
-            // placeholder="blur"
-            width={img.width}
-            height={img.height}
-            onClick={() => {
-              lightboxRef.current?.openGallery(index);
-            }}
-          />
+          <div className="relative" key={img.src + img.alt}>
+            <Image
+              key={img.src}
+              src={img.src}
+              alt={img.alt}
+              className=" my-4 "
+              // placeholder="blur"
+              width={img.width}
+              height={img.height}
+              placeholder="blur"
+              blurDataURL={img.blurDataUrl}
+            />
+            <div
+              className="absolute w-full h-full bg-transparent inset-0  hover:cursor-pointer hover:bg-stone-900 hover:bg-opacity-10"
+              onClick={() => {
+                lightboxRef.current?.openGallery(index);
+              }}
+            ></div>
+          </div>
         ))}
       </Mansory>
       <LightGalleryComponent
@@ -194,3 +186,42 @@ function Gallery({ images }: GalleryProps) {
     </>
   );
 }
+
+async function getImages(
+  cli: ReturnType<typeof createApi>,
+  query: string
+): Promise<Painting[]> {
+  const mappedPaintings: Painting[] = [];
+
+  const paintings = await cli.search.getPhotos({
+    query,
+  });
+  if ((paintings.type = "success")) {
+    const paintingArr = paintings.response!.results.map((painting, idx) => ({
+      src: painting.urls.full,
+      thumb: painting.urls.thumb,
+      width: painting.width,
+      height: painting.height,
+      alt: painting.alt_description ?? `classic-img-${idx}`,
+    }));
+    const paintingsArrWithDataUrl: Painting[] = [];
+
+    for (const painting of paintingArr) {
+      const blurDataUrl = await getDataUrl(painting.src);
+      paintingsArrWithDataUrl.push({ ...painting, blurDataUrl });
+    }
+    mappedPaintings.push(...paintingsArrWithDataUrl);
+  } else {
+    console.error("Could not get paintings");
+  }
+  return mappedPaintings;
+}
+
+const getDataUrl = async (imgUrl: string) => {
+  const imgData = await fetch(imgUrl);
+
+  const arrayBufferData = await imgData.arrayBuffer();
+  const lqipData = await lqip(Buffer.from(arrayBufferData));
+
+  return lqipData.metadata.dataURIBase64;
+};
